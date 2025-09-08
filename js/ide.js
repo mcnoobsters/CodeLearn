@@ -100,6 +100,26 @@
     card.querySelector('[data-action="run"]').addEventListener('click', async () => {
       const py = await ensurePyodide();
       try {
+        // Install interactive input() using browser prompt and echo the typed value
+        await py.runPythonAsync(`
+import builtins
+try:
+    from js import prompt as __learnx_js_prompt
+except Exception as __e:
+    __learnx_js_prompt = None
+
+def __learnx_input(__p=""):
+    if __learnx_js_prompt is None:
+        raise RuntimeError("Browser prompt unavailable for input()")
+    __s = __learnx_js_prompt(str(__p))
+    if __s is None:
+        raise KeyboardInterrupt("Input cancelled")
+    print(__s)
+    return __s
+
+builtins.input = __learnx_input
+del __learnx_input
+        `);
         await py.runPythonAsync(editor.getValue());
       } catch (err) {
         appendOut(String(err), true);
