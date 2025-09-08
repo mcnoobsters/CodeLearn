@@ -104,10 +104,13 @@
         // Install interactive input() using browser prompt and echo the typed value
         await py.runPythonAsync(`
 import builtins
+import sys
 try:
     from js import prompt as __learnx_js_prompt
+    from js import window as __learnx_window
 except Exception as __e:
     __learnx_js_prompt = None
+    __learnx_window = None
 
 def __learnx_input(__p=""):
     if __learnx_js_prompt is None:
@@ -120,6 +123,23 @@ def __learnx_input(__p=""):
 
 builtins.input = __learnx_input
 del __learnx_input
+
+# Fallback stdout/stderr redirection to JS if setStdout is unavailable
+try:
+    if __learnx_window is not None:
+        class __LearnxWriter:
+            def write(self, s):
+                try:
+                    if s is not None:
+                        __learnx_window.__learnx_py_stdout(str(s))
+                except Exception:
+                    pass
+            def flush(self):
+                return None
+        sys.stdout = __LearnxWriter()
+        sys.stderr = __LearnxWriter()
+except Exception:
+    pass
         `);
         await py.runPythonAsync(editor.getValue());
       } catch (err) {
