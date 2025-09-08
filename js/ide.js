@@ -69,6 +69,7 @@
         </div>
         <div class="button-row">
           <button class="btn primary" data-action="run">Run</button>
+          <button class="btn" data-action="clear-code">Clear Code</button>
           <button class="btn" data-action="clear">Clear Output</button>
           <button class="btn" data-action="reset">Reset Code</button>
         </div>
@@ -128,6 +129,10 @@ del __learnx_input
     card.querySelector('[data-action="clear"]').addEventListener('click', () => {
       output.innerHTML = '';
     });
+    card.querySelector('[data-action="clear-code"]').addEventListener('click', () => {
+      editor.setValue('');
+      saveCode(trackId, lessonId, 'py', '');
+    });
     card.querySelector('[data-action="reset"]').addEventListener('click', () => {
       editor.setValue(defaultCode);
       saveCode(trackId, lessonId, 'py', defaultCode);
@@ -164,9 +169,13 @@ del __learnx_input
         </div>
         <div class="button-row">
           <button class="btn primary" data-action="run">Run</button>
+          <button class="btn" data-action="clear-code">Clear Code</button>
           <button class="btn" data-action="reset">Reset Code</button>
+          <button class="btn" data-action="clear-console">Clear Console</button>
         </div>
         <iframe class="preview" sandbox="allow-scripts allow-same-origin"></iframe>
+        <div class="label">Console</div>
+        <div class="output" data-web-output></div>
       </div>
     `;
 
@@ -192,13 +201,14 @@ del __learnx_input
 
     if (focus === 'js') jsEd.focus();
 
+    const channel = `${trackId}/${lessonId}`;
     function runPreview() {
       const iframe = card.querySelector('iframe.preview');
       const doc = iframe.contentDocument || iframe.contentWindow.document;
       const html = htmlEd.getValue();
       const css = cssEd.getValue();
       const js = jsEd.getValue();
-      const full = `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>${css}</style>\n</head>\n<body>\n${html}\n<script>\n(function(){\n  const logEl = parent.document.createElement('div');\n  logEl.style.cssText='position:fixed;bottom:10px;right:10px;background:#111827;color:#e5e7eb;padding:6px 8px;border:1px solid #1f2937;border-radius:8px;font:12px ui-monospace;opacity:.9;z-index:2147483647;';\n  function add(msg){ var d=document.createElement('div'); d.textContent=String(msg); logEl.appendChild(d); if(logEl.childNodes.length>8) logEl.removeChild(logEl.firstChild);}\n  const c = console; console = new Proxy(c,{ get(t,p){ if(p==='log') return function(...a){ add(a.join(' ')); return t.log.apply(t,a); }; return t[p]; } });\n  parent.document.body.appendChild(logEl);\n  window.addEventListener('unload',()=>{ try{ parent.document.body.removeChild(logEl);}catch(e){} });\n})();\n</script>\n<script>\n${js}\n</script>\n</body>\n</html>`;
+      const full = `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>${css}</style>\n</head>\n<body>\n${html}\n<script>\n(function(){\n  function send(type, args){ try{ parent.postMessage({ __learnx_console:true, channel:${JSON.stringify(channel)}, type, args: Array.prototype.slice.call(args).map(String) }, '*'); }catch(e){} }\n  const orig = { log: console.log, warn: console.warn, error: console.error };\n  console.log = function(){ send('log', arguments); return orig.log.apply(console, arguments); };\n  console.warn = function(){ send('warn', arguments); return orig.warn.apply(console, arguments); };\n  console.error = function(){ send('error', arguments); return orig.error.apply(console, arguments); };\n  window.addEventListener('error', function(e){ send('error', [e.message || 'Error']); });\n})();\n</script>\n<script>\n${js}\n</script>\n</body>\n</html>`;
       doc.open();
       doc.write(full);
       doc.close();
@@ -215,8 +225,28 @@ del __learnx_input
       runPreview();
     });
 
-    // Initial auto-run to show preview
+    // Console sink in parent
+    const webOut = card.querySelector('[data-web-output]');
+    function appendWeb(type, msg) {
+      const line = document.createElement('div');
+      line.textContent = msg;
+      if (type === 'error') line.style.color = '#ef4444';
+      if (type === 'warn') line.style.color = '#f59e0b';
+      webOut.appendChild(line);
+      webOut.scrollTop = webOut.scrollHeight;
+    }
+    function onMsg(e){ const d = e.data; if (!d || !d.__learnx_console) return; if (d.channel !== channel) return; (d.args || []).forEach((m)=>appendWeb(d.type || 'log', m)); }
+    window.addEventListener('message', onMsg);
+
+    // Buttons
     runPreview();
+    card.querySelector('[data-action="clear-console"]').addEventListener('click', () => { webOut.innerHTML=''; });
+    card.querySelector('[data-action="clear-code"]').addEventListener('click', () => {
+      htmlEd.setValue(''); cssEd.setValue(''); jsEd.setValue('');
+      saveCode(trackId, lessonId, 'html', '');
+      saveCode(trackId, lessonId, 'css', '');
+      saveCode(trackId, lessonId, 'js', '');
+    });
 
     container.appendChild(card);
     return card;
