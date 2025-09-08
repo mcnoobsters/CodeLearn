@@ -2,16 +2,27 @@
   function createEditor({ mount, value, mode }) {
     const textarea = document.createElement('textarea');
     mount.appendChild(textarea);
-    const editor = CodeMirror.fromTextArea(textarea, {
-      value: value || '',
-      mode,
-      theme: 'material-darker',
-      lineNumbers: true,
-      autoCloseBrackets: true,
-      viewportMargin: Infinity,
-    });
-    editor.setValue(value || '');
-    return editor;
+    if (window.CodeMirror) {
+      const editor = CodeMirror.fromTextArea(textarea, {
+        value: value || '',
+        mode,
+        theme: 'material-darker',
+        lineNumbers: true,
+        autoCloseBrackets: true,
+        viewportMargin: Infinity,
+      });
+      editor.setValue(value || '');
+      return editor;
+    }
+    // Fallback to plain textarea API with minimal adapter
+    textarea.value = value || '';
+    const adapter = {
+      getValue: () => textarea.value,
+      setValue: (v) => { textarea.value = v; },
+      focus: () => textarea.focus(),
+      on: (evt, cb) => { if (evt === 'change') textarea.addEventListener('input', cb); },
+    };
+    return adapter;
   }
 
   function persistentKey(trackId, lessonId, suffix) {
@@ -207,7 +218,7 @@ except Exception:
     const cssInit = loadCode(trackId, lessonId, 'css', cssDefault);
     const jsInit = loadCode(trackId, lessonId, 'js', jsDefault);
 
-    const htmlEd = createEditor({ mount: htmlMount, value: htmlInit, mode: 'xml' });
+    const htmlEd = createEditor({ mount: htmlMount, value: htmlInit, mode: 'htmlmixed' });
     const cssEd = createEditor({ mount: cssMount, value: cssInit, mode: 'css' });
     const jsEd = createEditor({ mount: jsMount, value: jsInit, mode: 'javascript' });
 
@@ -227,7 +238,9 @@ except Exception:
       const doc = iframe.contentDocument || iframe.contentWindow.document;
       const html = htmlEd.getValue();
       const css = cssEd.getValue();
-      const js = jsEd.getValue();
+      let js = jsEd.getValue();
+      // Escape </script> to avoid breaking the HTML string injection
+      js = js.replace(/<\/(script)/gi, '<\\/$1');
       const full = `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>${css}</style>\n</head>\n<body>\n${html}\n<script>\n(function(){\n  function send(type, args){ try{ parent.postMessage({ __learnx_console:true, channel:${JSON.stringify(channel)}, type, args: Array.prototype.slice.call(args).map(String) }, '*'); }catch(e){} }\n  const orig = { log: console.log, warn: console.warn, error: console.error };\n  console.log = function(){ send('log', arguments); return orig.log.apply(console, arguments); };\n  console.warn = function(){ send('warn', arguments); return orig.warn.apply(console, arguments); };\n  console.error = function(){ send('error', arguments); return orig.error.apply(console, arguments); };\n  window.addEventListener('error', function(e){ send('error', [e.message || 'Error']); });\n})();\n</script>\n<script>\n${js}\n</script>\n</body>\n</html>`;
       doc.open();
       doc.write(full);
