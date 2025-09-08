@@ -5,7 +5,7 @@
     node.innerHTML = `
       <div class="brand">
         <div class="brand-logo">📚</div>
-        <div class="brand-title">Learn X</div>
+        <div class="brand-title">CodèLearn</div>
       </div>
       <div class="progress-pill">
         <span>Overall progress</span>
