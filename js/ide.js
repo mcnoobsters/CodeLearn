@@ -236,15 +236,18 @@ except Exception:
     function runPreview() {
       const iframe = card.querySelector('iframe.preview');
       const doc = iframe.contentDocument || iframe.contentWindow.document;
-      const html = htmlEd.getValue();
-      const css = cssEd.getValue();
-      let js = jsEd.getValue();
-      // Escape </script> to avoid breaking the HTML string injection
-      js = js.replace(/<\/(script)/gi, '<\\/$1');
-      const full = `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>${css}</style>\n</head>\n<body>\n${html}\n<script>\n(function(){\n  function send(type, args){ try{ parent.postMessage({ __learnx_console:true, channel:${JSON.stringify(channel)}, type, args: Array.prototype.slice.call(args).map(String) }, '*'); }catch(e){} }\n  const orig = { log: console.log, warn: console.warn, error: console.error };\n  console.log = function(){ send('log', arguments); return orig.log.apply(console, arguments); };\n  console.warn = function(){ send('warn', arguments); return orig.warn.apply(console, arguments); };\n  console.error = function(){ send('error', arguments); return orig.error.apply(console, arguments); };\n  window.addEventListener('error', function(e){ send('error', [e.message || 'Error']); });\n})();\n</script>\n<script>\n${js}\n</script>\n</body>\n</html>`;
-      doc.open();
-      doc.write(full);
-      doc.close();
+      try {
+        const html = htmlEd.getValue();
+        const css = cssEd.getValue();
+        let js = jsEd.getValue();
+        js = js.replace(/<\/(script)/gi, '<\\/$1');
+        const full = `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<style>${css}</style>\n</head>\n<body>\n${html}\n<script>\n(function(){\n  function send(type, args){ try{ parent.postMessage({ __learnx_console:true, channel:${JSON.stringify(channel)}, type, args: Array.prototype.slice.call(args).map(String) }, '*'); }catch(e){} }\n  const orig = { log: console.log, warn: console.warn, error: console.error };\n  console.log = function(){ send('log', arguments); return orig.log.apply(console, arguments); };\n  console.warn = function(){ send('warn', arguments); return orig.warn.apply(console, arguments); };\n  console.error = function(){ send('error', arguments); return orig.error.apply(console, arguments); };\n  window.addEventListener('error', function(e){ send('error', [e.message || 'Error']); });\n})();\n</script>\n<script>\n${js}\n</script>\n</body>\n</html>`;
+        doc.open();
+        doc.write(full);
+        doc.close();
+      } catch (e) {
+        appendWeb('error', String(e && e.message ? e.message : e));
+      }
     }
 
     card.querySelector('[data-action="run"]').addEventListener('click', runPreview);
